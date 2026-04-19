@@ -74,34 +74,26 @@ async def scrape_tech_news(browser):
     return news_items
 
 async def main():
-    print("========================================")
-    print("🚀 開始新聞抓取任務 (Macau & Tech)")
-    print("========================================")
-    
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         
-        print("\n[1/2] 正在處理：澳門日報...")
+        print("\n🇲🇴 澳門日報\n" + "─" * 30)
         macau = await scrape_macau_news(browser)
         if macau:
             for i, item in enumerate(macau, 1):
                 print(f"{i}. {item}")
         else:
-            print("  未能取得澳門新聞。")
+            print("未能取得澳門新聞。")
 
-        print("\n[2/2] 正在處理：美股科技新聞...")
+        print("\n🇺🇸 美股科技新聞\n" + "─" * 30)
         tech = await scrape_tech_news(browser)
         if tech:
             for i, item in enumerate(tech, 1):
                 print(f"{i}. {item}")
         else:
-            print("  未能取得科技新聞。")
+            print("未能取得科技新聞。")
             
         await browser.close()
-    
-    print("\n========================================")
-    print("✅ 任務完成！")
-    print("========================================")
 
 if __name__ == "__main__":
     asyncio.run(main())
