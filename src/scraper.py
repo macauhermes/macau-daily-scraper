@@ -77,7 +77,7 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         
-        print("\n🇲🇴 澳門日報\n" + "─" * 30)
+        print("\n\n🇲🇴 澳門日報")
         macau = await scrape_macau_news(browser)
         if macau:
             for i, item in enumerate(macau, 1):
@@ -85,7 +85,7 @@ async def main():
         else:
             print("未能取得澳門新聞。")
 
-        print("\n🇺🇸 美股科技新聞\n" + "─" * 30)
+        print("\n\n🇺🇸 美股科技新聞")
         tech = await scrape_tech_news(browser)
         if tech:
             for i, item in enumerate(tech, 1):
