@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import datetime
 from playwright.async_api import async_playwright
 
 async def scrape_macau_news(browser):
@@ -7,26 +8,43 @@ async def scrape_macau_news(browser):
     page = await browser.new_page()
     news_items = []
     try:
-        await page.goto("https://www.macaoday.com/", timeout=60000, wait_until="domcontentloaded")
-        # Using a more robust selector for news links
-        links = await page.locator('a').all()
-        for link in links:
-            text = (await link.inner_text()).strip()
-            href = await link.get_attribute('href')
-            if text and href and len(text) > 5:
-                # Clean URL
-                clean_url = href.replace('https://www.macaoday.com/', '').replace('https://macaoday.com/', '')
-                if clean_url.startswith('/'):
-                    clean_url = clean_url.lstrip('/')
-                
-                item = f"{text} ({clean_url})"
-                if item not in news_items:
-                    news_items.append(item)
-            if len(news_items) >= 10:
+        # Start from homepage, it will redirect to today's date automatically
+        # Then use the base URL to build page numbers
+        
+        page_num = 2  # node_2.htm is the first news section
+        base_url = "https://www.macaodaily.com/html"
+        
+        while len(news_items) < 10:
+            url = f"{base_url}/node_{page_num}.htm"
+            print(f"    正在抓取: node_{page_num}.htm")
+            
+            await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+            await page.wait_for_timeout(1500)
+            
+            # Extract news titles from content links
+            links = await page.locator('a[href*="content_"]').all()
+            found_count = 0
+            for link in links:
+                text = (await link.inner_text()).strip()
+                if text and len(text) > 5 and text not in news_items:
+                    news_items.append(text)
+                    found_count += 1
+                    if len(news_items) >= 10:
+                        break
+            
+            if found_count == 0:
+                print(f"    node_{page_num}.htm 無文章，停止抓取")
                 break
+                
+            page_num += 1
+            
+            # Safety limit: don't check more than 20 pages
+            if page_num > 21:
+                break
+                
     except Exception as e:
         print(f"[!] 澳門新聞抓取錯誤: {e}")
-    return news_items
+    return news_items[:10]
 
 async def scrape_tech_news(browser):
     print("[+] 正在抓取美股科技新聞...")
@@ -47,9 +65,8 @@ async def scrape_tech_news(browser):
                 
                 # Cleanify relatively simple
                 clean_url = href.split('?')[0] # Remove tracking params
-                item = f"{text} ({clean_url})"
-                if item not in news_items:
-                    news_items.append(item)
+                if text not in news_items:
+                    news_items.append(text)
             if len(news_items) >= 10:
                 break
     except Exception as e:
