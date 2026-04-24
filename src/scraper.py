@@ -8,20 +8,44 @@ async def scrape_macau_news(browser):
     page = await browser.new_page()
     news_items = []
     try:
-        # Start from homepage, it will redirect to today's date automatically
-        # Then use the base URL to build page numbers
+        # 直接去首頁，會自動跳轉到今日日期頁面
+        base_url = "https://www.macaodaily.com"
         
-        page_num = 2  # node_2.htm is the first news section
-        base_url = "https://www.macaodaily.com/html"
+        print(f"    正在抓取: {base_url}")
+        await page.goto(base_url, timeout=60000, wait_until="domcontentloaded")
+        await page.wait_for_timeout(2000)
         
+        # 取得 redirect 後的 URL，提取日期路徑
+        current_url = page.url
+        print(f"    跳轉到: {current_url}")
+        
+        # 從 URL 提取日期路徑，例如 /html/2026-04/24/
+        import re
+        date_match = re.search(r'/html/(\d{4}-\d{2}/\d{2})/', current_url)
+        if not date_match:
+            print("[!] 無法取得日期路徑")
+            return []
+        date_path = date_match.group(1)  # e.g., "2026-04/24"
+        html_base = f"{base_url}/html/{date_path}"
+        
+        # 從首頁抓取新聞連結
+        links = await page.locator('a[href*="content_"]').all()
+        for link in links:
+            text = (await link.inner_text()).strip()
+            if text and len(text) > 5 and text not in news_items:
+                news_items.append(text)
+                if len(news_items) >= 10:
+                    break
+        
+        # 如果不夠10則，嘗試抓取更多頁面 (從 node_3 開始，因為首頁已是 node_2)
+        page_num = 3
         while len(news_items) < 10:
-            url = f"{base_url}/node_{page_num}.htm"
+            url = f"{html_base}/node_{page_num}.htm"
             print(f"    正在抓取: node_{page_num}.htm")
             
             await page.goto(url, timeout=60000, wait_until="domcontentloaded")
             await page.wait_for_timeout(1500)
             
-            # Extract news titles from content links
             links = await page.locator('a[href*="content_"]').all()
             found_count = 0
             for link in links:
@@ -37,8 +61,6 @@ async def scrape_macau_news(browser):
                 break
                 
             page_num += 1
-            
-            # Safety limit: don't check more than 20 pages
             if page_num > 21:
                 break
                 
