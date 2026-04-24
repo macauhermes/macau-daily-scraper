@@ -7,42 +7,16 @@ async def scrape_macau_news(browser):
     print("[+] 正在抓取澳門日報新聞...")
     page = await browser.new_page()
     news_items = []
-    try:
-        # 直接去首頁，會自動跳轉到今日日期頁面
-        base_url = "https://www.macaodaily.com"
+    visited_urls = set()
+    
+    async def scrape_current_page(url):
+        """抓取當前頁面的新聞連結"""
+        if url in visited_urls:
+            return 0
+        visited_urls.add(url)
         
-        print(f"    正在抓取: {base_url}")
-        await page.goto(base_url, timeout=60000, wait_until="domcontentloaded")
-        await page.wait_for_timeout(2000)
-        
-        # 取得 redirect 後的 URL，提取日期路徑
-        current_url = page.url
-        print(f"    跳轉到: {current_url}")
-        
-        # 從 URL 提取日期路徑，例如 /html/2026-04/24/
-        import re
-        date_match = re.search(r'/html/(\d{4}-\d{2}/\d{2})/', current_url)
-        if not date_match:
-            print("[!] 無法取得日期路徑")
-            return []
-        date_path = date_match.group(1)  # e.g., "2026-04/24"
-        html_base = f"{base_url}/html/{date_path}"
-        
-        # 從首頁抓取新聞連結
-        links = await page.locator('a[href*="content_"]').all()
-        for link in links:
-            text = (await link.inner_text()).strip()
-            if text and len(text) > 5 and text not in news_items:
-                news_items.append(text)
-                if len(news_items) >= 10:
-                    break
-        
-        # 如果不夠10則，嘗試抓取更多頁面 (從 node_3 開始，因為首頁已是 node_2)
-        page_num = 3
-        while len(news_items) < 10:
-            url = f"{html_base}/node_{page_num}.htm"
-            print(f"    正在抓取: node_{page_num}.htm")
-            
+        print(f"    正在抓取: {url}")
+        try:
             await page.goto(url, timeout=60000, wait_until="domcontentloaded")
             await page.wait_for_timeout(1500)
             
@@ -54,15 +28,35 @@ async def scrape_macau_news(browser):
                     news_items.append(text)
                     found_count += 1
                     if len(news_items) >= 10:
-                        break
-            
-            if found_count == 0:
-                print(f"    node_{page_num}.htm 無文章，停止抓取")
+                        return found_count
+            return found_count
+        except Exception as e:
+            print(f"    [!] 抓取錯誤: {e}")
+            return 0
+    
+    try:
+        # 1. 先去首頁，讓它自動跳轉
+        base_url = "https://www.macaodaily.com"
+        await scrape_current_page(base_url)
+        
+        # 2. 首頁已 redirect 到某節點，直接從下一節開始
+        #    從當前 URL 推斷節點號
+        import re
+        current_url = page.url
+        node_match = re.search(r'/node_(\d+)\.htm', current_url)
+        if node_match:
+            page_count = int(node_match.group(1)) + 1  # 從下一節點開始
+        else:
+            page_count = 2  # fallback
+        
+        # 3. 如果不夠10則，繼續抓下一頁
+        while len(news_items) < 10 and page_count <= 21:
+            next_url = f"{base_url}/html/2026-04/24/node_{page_count}.htm"
+            found = await scrape_current_page(next_url)
+            if found == 0:
+                print(f"    node_{page_count}.htm 無文章，停止抓取")
                 break
-                
-            page_num += 1
-            if page_num > 21:
-                break
+            page_count += 1
                 
     except Exception as e:
         print(f"[!] 澳門新聞抓取錯誤: {e}")
